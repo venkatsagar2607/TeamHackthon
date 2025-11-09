@@ -56,10 +56,6 @@ export default function Home() {
         <div className="mt-16 text-left max-w-3xl mx-auto">
           <h3 className="text-2xl font-bold mb-4 text-purple-300">🧭 Getting Started</h3>
           <ul className="list-disc list-inside space-y-2 text-gray-300">
-            <li>
-              Sign in with demo credentials:{" "}
-              <b className="text-pink-400">demo@urbanops.city / demo123</b>
-            </li>
             <li>Access your Dashboard for key insights and live data.</li>
             <li>Use Map View to visualize ongoing incidents and alerts.</li>
             <li>Visit Settings to customize your experience.</li>

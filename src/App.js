@@ -13,13 +13,17 @@ import Alert from './Pages/Alert';
 import Settings from './Pages/Settings';
 import MyReports from './Pages/MyReports';
 import Maps from './Pages/MapPage'
+import LocalServices from './Pages/LocalServices';
 
 
+import { ToastContainer } from 'react-toastify'; // ✅ Import it here
+import 'react-toastify/dist/ReactToastify.css'; // ✅ 
 
 function App() {
   return (
     <>
       <BrowserRouter>
+        <ToastContainer position="top-right" theme="dark" autoClose={3000} />
         <Routes>
           <Route path='/' element={<Signin />}></Route>
           <Route path='/signup' element={<Signup />}></Route>
@@ -34,6 +38,7 @@ function App() {
           <Route path='/settings' element={<Settings />}></Route>
           <Route path='/myreports' element={<MyReports />}></Route>
           <Route path='/maps' element={<Maps />}></Route>
+          <Route path='/localService' element={<LocalServices />}></Route>
         </Routes>
       </BrowserRouter>
     </>

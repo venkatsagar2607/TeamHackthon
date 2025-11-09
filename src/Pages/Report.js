@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Navbar from "../Navigation/Navbar";
 import Footer from "../Navigation/Footer";
 import {
@@ -8,83 +8,25 @@ import {
     Zap,
     Wind,
     UploadCloud,
-    Activity,
-    UserPlus,
-    //PlusCircle,
     Stethoscope,
 } from "lucide-react";
+import { ToastContainer, toast } from "react-toastify";
+import "react-toastify/dist/ReactToastify.css";
 
 export default function Report() {
     const [activeTab, setActiveTab] = useState("incident");
 
-    // INCIDENT REPORTS
+    // INCIDENT FORM
     const [formData, setFormData] = useState({
         category: "",
         location: "",
         description: "",
         image: null,
     });
+    const [imageUploaded, setImageUploaded] = useState(false);
+    const [reports, setReports] = useState([]);
 
-    const [reports, setReports] = useState([
-        {
-            id: 1,
-            category: "Traffic",
-            icon: <TrafficCone className="text-yellow-400" />,
-            description: "Heavy congestion at Banjara Hills, slow-moving vehicles.",
-            location: "Banjara Hills Main Road",
-            time: "5 mins ago",
-        },
-        {
-            id: 2,
-            category: "Weather",
-            icon: <CloudRain className="text-blue-400" />,
-            description: "Severe rainfall near Hitech City.",
-            location: "Hitech City, Hyderabad",
-            time: "20 mins ago",
-        },
-    ]);
-
-    const handleIncidentChange = (e) => {
-        const { name, value, files } = e.target;
-        setFormData({
-            ...formData,
-            [name]: files ? files[0] : value,
-        });
-    };
-
-    const handleIncidentSubmit = (e) => {
-        e.preventDefault();
-        if (!formData.category || !formData.description || !formData.location) {
-            alert("Please fill all fields before submitting!");
-            return;
-        }
-
-        const newReport = {
-            id: reports.length + 1,
-            category: formData.category,
-            icon:
-                formData.category === "Weather" ? (
-                    <CloudRain className="text-blue-400" />
-                ) : formData.category === "Traffic" ? (
-                    <TrafficCone className="text-yellow-400" />
-                ) : formData.category === "Ambulance" ? (
-                    <Ambulance className="text-red-400" />
-                ) : formData.category === "Power" ? (
-                    <Zap className="text-amber-400" />
-                ) : (
-                    <Wind className="text-green-400" />
-                ),
-            description: formData.description,
-            location: formData.location,
-            time: "Just now",
-        };
-
-        setReports([newReport, ...reports]);
-        setFormData({ category: "", location: "", description: "", image: null });
-        alert("✅ Incident Report submitted successfully!");
-    };
-
-    // PATIENT REPORTS
+    // PATIENT FORM
     const [patientData, setPatientData] = useState({
         name: "",
         age: "",
@@ -92,45 +34,100 @@ export default function Report() {
         disease: "",
         otherDisease: "",
     });
+    const [patients, setPatients] = useState([]);
 
-    const [patients, setPatients] = useState([
-        {
-            id: 1,
-            name: "Ravi Kumar",
-            age: 45,
-            aqi: 120,
-            disease: "Asthma",
-            icon: <Wind className="text-green-400" />,
-            time: "10 mins ago",
-        },
-        {
-            id: 2,
-            name: "Sneha Reddy",
-            age: 32,
-            aqi: 98,
-            disease: "Eye Irritation",
-            icon: <Activity className="text-yellow-400" />,
-            time: "30 mins ago",
-        },
-    ]);
+    // ✅ Load user's reports from backend
+    useEffect(() => {
+        const token = localStorage.getItem("token");
+        if (!token) return;
 
-    const handlePatientChange = (e) => {
-        const { name, value } = e.target;
-        setPatientData({
-            ...patientData,
-            [name]: value,
-        });
+        Promise.all([
+            fetch("http://localhost:8080/api/reports/incident/my", {
+                headers: { Authorization: `Bearer ${token}` },
+            }),
+            fetch("http://localhost:8080/api/reports/patient/my", {
+                headers: { Authorization: `Bearer ${token}` },
+            }),
+        ])
+            .then(([incRes, patRes]) => Promise.all([incRes.json(), patRes.json()]))
+            .then(([incData, patData]) => {
+                setReports(incData);
+                setPatients(patData);
+            })
+            .catch(() => toast.error("❌ Error loading reports"));
+    }, []);
+
+    // ✅ Incident form change
+    const handleIncidentChange = (e) => {
+        const { name, value, files } = e.target;
+        if (files) {
+            const file = files[0];
+            setFormData({ ...formData, image: file });
+            setImageUploaded(true);
+            toast.success("✅ Image uploaded successfully!");
+        } else {
+            setFormData({ ...formData, [name]: value });
+        }
     };
 
-    const handlePatientSubmit = (e) => {
+    // ✅ Incident submit
+    const handleIncidentSubmit = async (e) => {
         e.preventDefault();
-        if (!patientData.name || !patientData.age || !patientData.aqi || !patientData.disease) {
-            alert("Please fill all fields before submitting!");
+
+        if (!formData.category || !formData.description || !formData.location) {
+            toast.warn("⚠️ Please fill all fields before submitting!");
             return;
         }
 
-        const newPatient = {
-            id: patients.length + 1,
+        const token = localStorage.getItem("token");
+        const report = {
+            category: formData.category,
+            location: formData.location,
+            description: formData.description,
+            imageUrl: "", // will handle image upload later if needed
+        };
+
+        try {
+            const res = await fetch("http://localhost:8080/api/reports/incident", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    Authorization: `Bearer ${token}`,
+                },
+                body: JSON.stringify(report),
+            });
+
+            if (res.ok) {
+                const saved = await res.json();
+                setReports([saved, ...reports]);
+                setFormData({ category: "", location: "", description: "", image: null });
+                setImageUploaded(false);
+                toast.success("✅ Incident Report submitted successfully!");
+            } else {
+                toast.error("❌ Failed to submit incident report!");
+            }
+        } catch {
+            toast.error("⚠️ Could not connect to backend!");
+        }
+    };
+
+    // ✅ Patient form change
+    const handlePatientChange = (e) => {
+        const { name, value } = e.target;
+        setPatientData({ ...patientData, [name]: value });
+    };
+
+    // ✅ Patient submit
+    const handlePatientSubmit = async (e) => {
+        e.preventDefault();
+
+        if (!patientData.name || !patientData.age || !patientData.aqi || !patientData.disease) {
+            toast.warn("⚠️ Please fill all fields before submitting!");
+            return;
+        }
+
+        const token = localStorage.getItem("token");
+        const patientReport = {
             name: patientData.name,
             age: patientData.age,
             aqi: patientData.aqi,
@@ -138,29 +135,36 @@ export default function Report() {
                 patientData.disease === "Other"
                     ? patientData.otherDisease
                     : patientData.disease,
-            icon:
-                patientData.disease === "Cancer" ? (
-                    <Stethoscope className="text-pink-400" />
-                ) : patientData.disease === "Asthma" ? (
-                    <Wind className="text-green-400" />
-                ) : patientData.disease === "Eye" ? (
-                    <Activity className="text-yellow-400" />
-                ) : (
-                    <UserPlus className="text-blue-400" />
-                ),
-            time: "Just now",
         };
 
-        setPatients([newPatient, ...patients]);
-        setPatientData({ name: "", age: "", aqi: "", disease: "", otherDisease: "" });
-        alert("✅ Patient Report submitted successfully!");
+        try {
+            const res = await fetch("http://localhost:8080/api/reports/patient", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    Authorization: `Bearer ${token}`,
+                },
+                body: JSON.stringify(patientReport),
+            });
+
+            if (res.ok) {
+                const saved = await res.json();
+                setPatients([saved, ...patients]);
+                setPatientData({ name: "", age: "", aqi: "", disease: "", otherDisease: "" });
+                toast.success("✅ Patient Report submitted successfully!");
+            } else {
+                toast.error("❌ Failed to submit patient report!");
+            }
+        } catch {
+            toast.error("⚠️ Could not connect to backend!");
+        }
     };
 
+    // ✅ UI
     return (
         <div className="min-h-screen bg-[#0f052e] text-white relative">
             <Navbar />
-
-            {/* Glowing Background */}
+            <ToastContainer />
             <div className="absolute -top-1/3 -left-1/3 w-1/2 h-1/2 bg-gradient-to-br from-blue-500 via-purple-600 to-pink-600 rounded-full opacity-20 blur-3xl" />
             <div className="absolute bottom-0 right-0 w-1/3 h-1/3 bg-gradient-to-br from-pink-400 via-purple-400 to-yellow-400 rounded-full opacity-20 blur-3xl" />
 
@@ -169,7 +173,7 @@ export default function Report() {
                     Smart City Report Center
                 </h1>
 
-                {/* TAB SWITCH */}
+                {/* Tabs */}
                 <div className="flex mb-8 border-b border-purple-600">
                     <button
                         onClick={() => setActiveTab("incident")}
@@ -223,7 +227,7 @@ export default function Report() {
                                     placeholder="Enter location"
                                     value={formData.location}
                                     onChange={handleIncidentChange}
-                                    className="w-full px-4 py-3 bg-purple-900/50 border border-purple-700/50 rounded-lg text-gray-200 focus:ring-2 focus:ring-purple-500"
+                                    className="w-full px-4 py-3 bg-purple-900/50 border border-purple-700/50 rounded-lg text-gray-200"
                                 />
                             </div>
                         </div>
@@ -235,21 +239,34 @@ export default function Report() {
                                 placeholder="Describe the issue..."
                                 value={formData.description}
                                 onChange={handleIncidentChange}
-                                className="w-full px-4 py-3 bg-purple-900/50 border border-purple-700/50 rounded-lg text-gray-200 focus:ring-2 focus:ring-purple-500"
+                                className="w-full px-4 py-3 bg-purple-900/50 border border-purple-700/50 rounded-lg text-gray-200"
                             ></textarea>
                         </div>
                         <div className="mt-6">
                             <label className="block mb-2 text-sm text-gray-300">Upload Image</label>
-                            <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-purple-700/50 rounded-lg cursor-pointer bg-purple-900/30 hover:bg-purple-800/40 transition">
-                                <UploadCloud size={24} className="text-purple-400 mb-2" />
-                                <p className="text-sm text-gray-400">Click to upload or drag and drop</p>
-                                <input
-                                    type="file"
-                                    name="image"
-                                    accept="image/*"
-                                    onChange={handleIncidentChange}
-                                    className="hidden"
-                                />
+                            <label
+                                className={`flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-purple-700/50 rounded-lg cursor-pointer bg-purple-900/30 transition ${imageUploaded ? "opacity-60 cursor-not-allowed" : "hover:bg-purple-800/40"
+                                    }`}
+                            >
+                                {!imageUploaded ? (
+                                    <>
+                                        <UploadCloud size={24} className="text-purple-400 mb-2" />
+                                        <p className="text-sm text-gray-400">
+                                            Click to upload or drag and drop
+                                        </p>
+                                        <input
+                                            type="file"
+                                            name="image"
+                                            accept="image/*"
+                                            onChange={handleIncidentChange}
+                                            className="hidden"
+                                        />
+                                    </>
+                                ) : (
+                                    <p className="text-green-400 font-semibold">
+                                        ✅ Image Uploaded
+                                    </p>
+                                )}
                             </label>
                         </div>
                         <div className="text-center mt-8">
@@ -348,25 +365,49 @@ export default function Report() {
                     </form>
                 )}
 
-                {/* RECENT LIST */}
+                {/* RECENT REPORTS */}
                 <div className="bg-white/10 backdrop-blur-md border border-purple-700/40 rounded-2xl p-8 shadow-lg">
                     <h2 className="text-2xl font-semibold mb-6">
-                        {activeTab === "incident" ? "Recent Incident Reports" : "Recent Patient Reports"}
+                        {activeTab === "incident"
+                            ? "Recent Incident Reports"
+                            : "Recent Patient Reports"}
                     </h2>
+
                     <div className="space-y-4 max-h-[400px] overflow-y-auto scrollbar-thin scrollbar-thumb-purple-500/50">
                         {(activeTab === "incident" ? reports : patients).map((item) => (
                             <div
                                 key={item.id}
                                 className="flex items-start gap-4 bg-purple-900/40 rounded-lg p-4 hover:bg-purple-800/40 transition"
                             >
-                                <div className="flex-shrink-0 mt-1">{item.icon}</div>
+                                <div className="flex-shrink-0 mt-1">
+                                    {activeTab === "incident" ? (
+                                        item.category === "Weather" ? (
+                                            <CloudRain className="text-blue-400" />
+                                        ) : item.category === "Traffic" ? (
+                                            <TrafficCone className="text-yellow-400" />
+                                        ) : item.category === "Ambulance" ? (
+                                            <Ambulance className="text-red-400" />
+                                        ) : item.category === "Power" ? (
+                                            <Zap className="text-amber-400" />
+                                        ) : (
+                                            <Wind className="text-green-400" />
+                                        )
+                                    ) : (
+                                        <Stethoscope className="text-pink-400" />
+                                    )}
+                                </div>
                                 <div>
                                     {activeTab === "incident" ? (
                                         <>
-                                            <h3 className="font-semibold text-white">{item.category} Report</h3>
-                                            <p className="text-gray-300 text-sm">{item.description}</p>
+                                            <h3 className="font-semibold text-white">
+                                                {item.category} Report
+                                            </h3>
+                                            <p className="text-gray-300 text-sm">
+                                                {item.description}
+                                            </p>
                                             <p className="text-xs text-gray-500 mt-1">
-                                                📍 {item.location} — {item.time}
+                                                📍 {item.location} —{" "}
+                                                {new Date(item.createdAt).toLocaleString()}
                                             </p>
                                         </>
                                     ) : (
@@ -377,7 +418,9 @@ export default function Report() {
                                             <p className="text-gray-300 text-sm">
                                                 Condition: {item.disease} | AQI: {item.aqi}
                                             </p>
-                                            <p className="text-xs text-gray-500 mt-1">🕒 {item.time}</p>
+                                            <p className="text-xs text-gray-500 mt-1">
+                                                🕒 {new Date(item.createdAt).toLocaleString()}
+                                            </p>
                                         </>
                                     )}
                                 </div>

@@ -8,85 +8,67 @@ import {
     Stethoscope,
     AlertTriangle,
 } from "lucide-react";
+import { ToastContainer, toast } from "react-toastify";
+import "react-toastify/dist/ReactToastify.css";
 
 export default function MyReports() {
     const [myReports, setMyReports] = useState([]);
 
-    // ✅ Simulated user
-    const userEmail = localStorage.getItem("userEmail") || "guest@example.com";
-
     useEffect(() => {
-        // Load stored reports
-        const userKey = `myReports_${userEmail}`;
-        const stored = JSON.parse(localStorage.getItem(userKey)) || [];
+        const token = localStorage.getItem("token");
+        if (!token) {
+            toast.warn("⚠️ Please sign in to view your reports.");
+            return;
+        }
 
-        // ✅ Add Mock Data if no stored data
-        const mockReports = [
-            {
-                id: 1,
-                type: "incident",
-                category: "Traffic",
-                description: "Heavy congestion reported at Banjara Hills main road.",
-                location: "Banjara Hills, Hyderabad",
-                time: "10 mins ago",
-            },
-            {
-                id: 2,
-                type: "incident",
-                category: "Weather",
-                description: "Severe rainfall causing local flooding.",
-                location: "Hitech City, Hyderabad",
-                time: "25 mins ago",
-            },
-            {
-                id: 3,
-                type: "incident",
-                category: "Pollution",
-                description: "AQI rising beyond 200 in industrial area.",
-                location: "Patancheru, Hyderabad",
-                time: "1 hour ago",
-            },
-            {
-                id: 4,
-                type: "patient",
-                name: "Ravi Kumar",
-                age: 34,
-                aqi: 210,
-                disease: "Asthma",
-                time: "Today, 9:30 AM",
-            },
-            {
-                id: 5,
-                type: "patient",
-                name: "Sneha Reddy",
-                age: 28,
-                aqi: 180,
-                disease: "Eye Irritation",
-                time: "Yesterday, 4:10 PM",
-            },
-            {
-                id: 6,
-                type: "patient",
-                name: "Anil Sharma",
-                age: 52,
-                aqi: 250,
-                disease: "Heart Disease",
-                time: "2 days ago",
-            },
-        ];
+        // ✅ Fetch both incident + patient reports for logged-in user
+        Promise.all([
+            fetch("http://localhost:8080/api/reports/incident/my", {
+                headers: { Authorization: `Bearer ${token}` },
+            }),
+            fetch("http://localhost:8080/api/reports/patient/my", {
+                headers: { Authorization: `Bearer ${token}` },
+            }),
+        ])
+            .then(([incidentRes, patientRes]) => {
+                if (!incidentRes.ok || !patientRes.ok)
+                    throw new Error("Failed to load reports");
+                return Promise.all([incidentRes.json(), patientRes.json()]);
+            })
+            .then(([incidentData, patientData]) => {
+                // ✅ Normalize & merge both datasets
+                const incidentReports = incidentData.map((r) => ({
+                    id: r.id,
+                    type: "incident",
+                    category: r.category,
+                    description: r.description,
+                    location: r.location,
+                    time: new Date(r.createdAt).toLocaleString(),
+                }));
 
-        // Merge saved + mock
-        const allReports =
-            stored.length > 0 ? [...stored, ...mockReports] : mockReports;
+                const patientReports = patientData.map((p) => ({
+                    id: p.id,
+                    type: "patient",
+                    name: p.name,
+                    age: p.age,
+                    aqi: p.aqi,
+                    disease: p.disease,
+                    time: new Date(p.createdAt).toLocaleString(),
+                }));
 
-        // Sort newest first
-        const sorted = allReports.sort((a, b) => b.id - a.id);
-        setMyReports(sorted);
-    }, [userEmail]);
+                // Combine & sort newest first
+                const allReports = [...incidentReports, ...patientReports].sort(
+                    (a, b) => b.id - a.id
+                );
+                setMyReports(allReports);
+            })
+            .catch(() => toast.error("❌ Failed to load reports. Please try again."));
+    }, []);
 
     return (
         <div className="min-h-screen bg-[#0f0426] text-white relative">
             <Navbar />
+            <ToastContainer position="top-right" theme="dark" autoClose={2000} />
 
             {/* Background Glow */}
             <div className="absolute -top-1/3 -left-1/3 w-1/2 h-1/2 bg-gradient-to-br from-blue-500 via-purple-600 to-pink-600 rounded-full opacity-20 blur-3xl" />
@@ -108,9 +90,9 @@ export default function MyReports() {
                     </div>
                 ) : (
                     <div className="grid md:grid-cols-2 gap-6">
-                        {myReports.map((r, i) => (
+                        {myReports.map((r) => (
                             <div
-                                key={i}
+                                key={r.id}
                                 className="bg-white/10 backdrop-blur-md border border-purple-700/40 rounded-2xl p-6 shadow-lg hover:bg-white/20 transition"
                             >
                                 {/* Header */}
@@ -136,7 +118,9 @@ export default function MyReports() {
                                 {/* Body */}
                                 {r.type === "incident" ? (
                                     <>
-                                        <p className="text-sm text-gray-300 mb-2">{r.description}</p>
+                                        <p className="text-sm text-gray-300 mb-2">
+                                            {r.description}
+                                        </p>
                                         <p className="text-xs text-gray-500">📍 {r.location}</p>
                                         <p className="text-xs text-gray-500 mt-1">🕒 {r.time}</p>
                                     </>

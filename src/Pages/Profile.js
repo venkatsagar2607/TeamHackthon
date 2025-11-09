@@ -1,38 +1,171 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Navbar from "../Navigation/Navbar";
-import {
-    MapPin,
-    Github,
-    Twitter,
-    Instagram,
-    Globe,
-} from "lucide-react";
+import { MapPin, Github, Twitter, Instagram, Globe } from "lucide-react";
 import Footer from "../Navigation/Footer";
+import { toast } from "react-toastify"; // ✅ Toastify import
 
 export default function Profile() {
     const [formData, setFormData] = useState({
-        name: "Venkata Sagar",
-        email: "venkata@example.com",
-        phone: "+91 9876543210",
-        dob: "2000-05-12",
-        address1: "Flat 101, Sunrise Residency",
-        address2: "Madhapur Main Road",
-        city: "Hyderabad",
-        state: "Telangana",
-        country: "India",
-        pincode: "500081",
+        name: "",
+        email: "",
+        phone: "",
+        dob: "",
+        address1: "",
+        address2: "",
+        city: "",
+        state: "",
+        country: "",
+        pincode: "",
     });
 
-    const userInitial = formData.name ? formData.name.charAt(0).toUpperCase() : "U";
+    // ✅ Fetch user data from backend
+    useEffect(() => {
+        const token = localStorage.getItem("token");
+        if (!token) return;
 
-    const handleChange = (e) => {
-        setFormData({ ...formData, [e.target.name]: e.target.value });
+        fetch("http://localhost:8080/api/user/me", {
+            headers: {
+                Authorization: `Bearer ${token}`,
+            },
+        })
+            .then((res) => res.json())
+            .then((data) => {
+                setFormData({
+                    name: data.name || "",
+                    email: data.email || "",
+                    phone: data.phone || "",
+                    dob: data.dob || "",
+                    address1: data.address1 || "",
+                    address2: data.address2 || "",
+                    city: data.city || "",
+                    state: data.state || "",
+                    country: data.country || "",
+                    pincode: data.pincode || "",
+                });
+            })
+            .catch((err) => {
+                console.error("Failed to load user profile:", err);
+                toast.error("Failed to load user data!", {
+                    position: "top-right",
+                    autoClose: 3000,
+                    theme: "colored",
+                });
+            });
+    }, []);
+
+    // ✅ Handle input changes (with auto city/state from pincode)
+    const handleChange = async (e) => {
+        const { name, value } = e.target;
+
+        if (name === "pincode") {
+            setFormData((prev) => ({ ...prev, pincode: value }));
+
+            if (value.length === 6) {
+                try {
+                    const response = await fetch(`https://api.postalpincode.in/pincode/${value}`);
+                    const data = await response.json();
+
+                    if (data[0].Status === "Success" && data[0].PostOffice && data[0].PostOffice[0]) {
+                        const post = data[0].PostOffice[0];
+                        setFormData((prev) => ({
+                            ...prev,
+                            city: post.Block || post.District || "",
+                            state: post.State || "",
+                            country: post.Country || "India",
+                            pincode: value,
+                        }));
+                        toast.success("📍 Location details auto-filled!", {
+                            position: "top-right",
+                            autoClose: 2000,
+                            theme: "colored",
+                        });
+                    } else {
+                        setFormData((prev) => ({
+                            ...prev,
+                            pincode: value,
+                            city: "",
+                            state: "",
+                            country: "",
+                        }));
+                        toast.warn("⚠️ Invalid pincode entered.", {
+                            position: "top-right",
+                            autoClose: 2000,
+                            theme: "colored",
+                        });
+                    }
+                } catch (error) {
+                    console.error("❌ Error fetching pincode details:", error);
+                    setFormData((prev) => ({
+                        ...prev,
+                        pincode: value,
+                        city: "",
+                        state: "",
+                        country: "",
+                    }));
+                    toast.error("❌ Could not fetch location details!", {
+                        position: "top-right",
+                        autoClose: 3000,
+                        theme: "colored",
+                    });
+                }
+            }
+        } else {
+            setFormData((prev) => ({
+                ...prev,
+                [name]: value,
+            }));
+        }
     };
 
+    // ✅ Save profile updates to backend
     const handleSubmit = (e) => {
         e.preventDefault();
-        alert("Profile updated successfully!");
+
+        const token = localStorage.getItem("token");
+        if (!token) {
+            toast.error("⚠️ You are not logged in!", {
+                position: "top-right",
+                autoClose: 2000,
+                theme: "colored",
+            });
+            return;
+        }
+
+        fetch("http://localhost:8080/api/user/me", {
+            method: "PUT",
+            headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify(formData),
+        })
+            .then((res) => {
+                if (res.ok) {
+                    toast.success("✅ Profile updated successfully!", {
+                        position: "top-right",
+                        autoClose: 2000,
+                        theme: "colored",
+                    });
+                    setTimeout(() => window.location.reload(), 1500);
+                } else {
+                    toast.error("❌ Failed to update profile!", {
+                        position: "top-right",
+                        autoClose: 3000,
+                        theme: "colored",
+                    });
+                }
+            })
+            .catch((err) => {
+                console.error("❌ Error updating profile:", err);
+                toast.error("⚠️ Could not connect to server!", {
+                    position: "top-right",
+                    autoClose: 3000,
+                    theme: "colored",
+                });
+            });
     };
+
+    const userInitial = formData.name ? formData.name.charAt(0).toUpperCase() : "U";
 
     return (
         <div className="min-h-screen bg-[#0f0426] text-white pt-20 relative overflow-hidden">
@@ -50,10 +183,10 @@ export default function Profile() {
                         {userInitial}
                     </div>
 
-                    <h2 className="mt-4 text-2xl font-bold">{formData.name}</h2>
-                    <p className="text-gray-400">Full Stack Developer</p>
+                    <h2 className="mt-4 text-2xl font-bold">{formData.name || "Loading..."}</h2>
+                    <p className="text-gray-400">{formData.email}</p>
                     <p className="text-sm text-gray-500 flex items-center justify-center gap-1 mt-1">
-                        <MapPin size={14} /> {formData.city}, {formData.state}
+                        <MapPin size={14} /> {formData.city || "City"}, {formData.state || "State"}
                     </p>
 
                     <div className="mt-5 flex gap-4">
@@ -72,7 +205,7 @@ export default function Profile() {
                                 <Globe size={16} className="text-purple-400" />
                                 <span>Website</span>
                             </div>
-                            <span className="text-gray-400">@smartcity</span>
+                            <span className="text-gray-400">@smartcity.vercel.app</span>
                         </div>
 
                         <div className="flex items-center justify-between">
@@ -80,7 +213,7 @@ export default function Profile() {
                                 <Github size={16} className="text-purple-400" />
                                 <span>Github</span>
                             </div>
-                            <span className="text-gray-400">@venkata</span>
+                            <span className="text-gray-400">@{formData.name}226</span>
                         </div>
 
                         <div className="flex items-center justify-between">
@@ -88,7 +221,7 @@ export default function Profile() {
                                 <Twitter size={16} className="text-purple-400" />
                                 <span>Twitter</span>
                             </div>
-                            <span className="text-gray-400">@venkata_sagar</span>
+                            <span className="text-gray-400">@__{formData.name}</span>
                         </div>
 
                         <div className="flex items-center justify-between">
@@ -96,7 +229,7 @@ export default function Profile() {
                                 <Instagram size={16} className="text-purple-400" />
                                 <span>Instagram</span>
                             </div>
-                            <span className="text-gray-400">@vsagar</span>
+                            <span className="text-gray-400">@{formData.name}__</span>
                         </div>
                     </div>
                 </div>
@@ -107,115 +240,31 @@ export default function Profile() {
 
                     <form onSubmit={handleSubmit} className="space-y-6">
                         <div className="grid md:grid-cols-2 gap-6">
-                            <div>
-                                <label className="block text-sm mb-1 text-gray-300">Full Name</label>
-                                <input
-                                    type="text"
-                                    name="name"
-                                    value={formData.name}
-                                    onChange={handleChange}
-                                    className="w-full px-4 py-3 bg-purple-900/40 border border-purple-700/50 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 placeholder-gray-400"
-                                />
-                            </div>
-
-                            <div>
-                                <label className="block text-sm mb-1 text-gray-300">Email</label>
-                                <input
-                                    type="email"
-                                    name="email"
-                                    value={formData.email}
-                                    onChange={handleChange}
-                                    className="w-full px-4 py-3 bg-purple-900/40 border border-purple-700/50 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 placeholder-gray-400"
-                                />
-                            </div>
-
-                            <div>
-                                <label className="block text-sm mb-1 text-gray-300">Phone</label>
-                                <input
-                                    type="text"
-                                    name="phone"
-                                    value={formData.phone}
-                                    onChange={handleChange}
-                                    className="w-full px-4 py-3 bg-purple-900/40 border border-purple-700/50 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 placeholder-gray-400"
-                                />
-                            </div>
-
-                            <div>
-                                <label className="block text-sm mb-1 text-gray-300">Date of Birth</label>
-                                <input
-                                    type="date"
-                                    name="dob"
-                                    value={formData.dob}
-                                    onChange={handleChange}
-                                    className="w-full px-4 py-3 bg-purple-900/40 border border-purple-700/50 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 placeholder-gray-400"
-                                />
-                            </div>
-
-                            <div>
-                                <label className="block text-sm mb-1 text-gray-300">Address Line 1</label>
-                                <input
-                                    type="text"
-                                    name="address1"
-                                    value={formData.address1}
-                                    onChange={handleChange}
-                                    className="w-full px-4 py-3 bg-purple-900/40 border border-purple-700/50 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 placeholder-gray-400"
-                                />
-                            </div>
-
-                            <div>
-                                <label className="block text-sm mb-1 text-gray-300">Address Line 2</label>
-                                <input
-                                    type="text"
-                                    name="address2"
-                                    value={formData.address2}
-                                    onChange={handleChange}
-                                    className="w-full px-4 py-3 bg-purple-900/40 border border-purple-700/50 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 placeholder-gray-400"
-                                />
-                            </div>
-
-                            <div>
-                                <label className="block text-sm mb-1 text-gray-300">City</label>
-                                <input
-                                    type="text"
-                                    name="city"
-                                    value={formData.city}
-                                    onChange={handleChange}
-                                    className="w-full px-4 py-3 bg-purple-900/40 border border-purple-700/50 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 placeholder-gray-400"
-                                />
-                            </div>
-
-                            <div>
-                                <label className="block text-sm mb-1 text-gray-300">State</label>
-                                <input
-                                    type="text"
-                                    name="state"
-                                    value={formData.state}
-                                    onChange={handleChange}
-                                    className="w-full px-4 py-3 bg-purple-900/40 border border-purple-700/50 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 placeholder-gray-400"
-                                />
-                            </div>
-
-                            <div>
-                                <label className="block text-sm mb-1 text-gray-300">Country</label>
-                                <input
-                                    type="text"
-                                    name="country"
-                                    value={formData.country}
-                                    onChange={handleChange}
-                                    className="w-full px-4 py-3 bg-purple-900/40 border border-purple-700/50 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 placeholder-gray-400"
-                                />
-                            </div>
-
-                            <div>
-                                <label className="block text-sm mb-1 text-gray-300">Pincode</label>
-                                <input
-                                    type="text"
-                                    name="pincode"
-                                    value={formData.pincode}
-                                    onChange={handleChange}
-                                    className="w-full px-4 py-3 bg-purple-900/40 border border-purple-700/50 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 placeholder-gray-400"
-                                />
-                            </div>
+                            {[
+                                ["name", "Full Name", "text"],
+                                ["email", "Email", "email", true],
+                                ["phone", "Phone", "text"],
+                                ["dob", "Date of Birth", "date"],
+                                ["address1", "Address Line 1", "text"],
+                                ["address2", "Address Line 2", "text"],
+                                ["city", "City", "text"],
+                                ["state", "State", "text"],
+                                ["country", "Country", "text"],
+                                ["pincode", "Pincode", "text"],
+                            ].map(([key, label, type, readOnly]) => (
+                                <div key={key}>
+                                    <label className="block text-sm mb-1 text-gray-300">{label}</label>
+                                    <input
+                                        type={type}
+                                        name={key}
+                                        value={formData[key]}
+                                        onChange={handleChange}
+                                        readOnly={readOnly}
+                                        placeholder={`Enter ${label.toLowerCase()}`}
+                                        className="w-full px-4 py-3 bg-purple-900/40 border border-purple-700/50 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 placeholder-gray-400"
+                                    />
+                                </div>
+                            ))}
                         </div>
 
                         <div className="text-right">
@@ -229,6 +278,7 @@ export default function Profile() {
                     </form>
                 </div>
             </div>
+
             <Footer />
         </div>
     );

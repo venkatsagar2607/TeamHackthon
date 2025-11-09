@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { Mail, Lock } from "lucide-react";
-import { useNavigate, Link } from "react-router-dom"; // ✅ import for redirect
+import { useNavigate, Link } from "react-router-dom";
+import { toast } from "react-toastify"; // ✅ Import toast
 
 // ✅ SVG for logo (no state here)
 const LogoIcon = () => (
@@ -81,38 +82,64 @@ const FacebookIcon = () => (
     </svg>
 );
 
-// ✅ MOCK USERS DATA
-const mockUsers = [
-    {
-        email: "user@example.com",
-        password: "123456",
-    },
-    {
-        email: "admin@example.com",
-        password: "admin123",
-    },
-];
-
 export default function Signin() {
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
-    const navigate = useNavigate(); // ✅ useNavigate for redirect
+    const [loading, setLoading] = useState(false);
+    const navigate = useNavigate();
 
-    const handleSubmit = (e) => {
+    // ✅ Handle login (with toast notifications)
+    const handleSubmit = async (e) => {
         e.preventDefault();
+        setLoading(true);
 
-        const foundUser = mockUsers.find(
-            (user) => user.email === email && user.password === password
-        );
+        try {
+            const response = await fetch("http://localhost:8080/api/auth/login", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({ email, password }),
+            });
 
-        if (foundUser) {
-            alert("✅ Sign in successful!");
-            navigate("/home"); // ✅ redirect to home page
-        } else {
-            alert("❌ Invalid email or password");
+            if (response.ok) {
+                const data = await response.json();
+
+                localStorage.setItem("token", data.token);
+                localStorage.setItem("userEmail", email);
+
+                toast.success("Sign in successful!", {
+                    position: "top-right",
+                    autoClose: 2000,
+                    hideProgressBar: false,
+                    closeOnClick: true,
+                    pauseOnHover: true,
+                    draggable: true,
+                    theme: "colored",
+                });
+
+                setTimeout(() => navigate("/home"), 1500);
+            } else {
+                const errorText = await response.text();
+                toast.error(" Login failed: " + errorText, {
+                    position: "top-right",
+                    autoClose: 3000,
+                    theme: "colored",
+                });
+            }
+        } catch (error) {
+            console.error("Error:", error);
+            toast.error(" Could not connect to backend!", {
+                position: "top-right",
+                autoClose: 3000,
+                theme: "colored",
+            });
+        } finally {
+            setLoading(false);
         }
     };
 
+    // ✅ UI remains 100% unchanged
     return (
         <div className="relative flex h-screen flex-col md:flex-row font-inter bg-[#100427] text-white overflow-hidden">
             {/* Background */}
@@ -156,7 +183,6 @@ export default function Signin() {
 
                     {/* Form */}
                     <form className="space-y-6" onSubmit={handleSubmit}>
-                        {/* Email */}
                         <div className="relative">
                             <span className="absolute inset-y-0 left-0 flex items-center pl-3">
                                 <Mail className="w-5 h-5 text-gray-400" />
@@ -171,7 +197,6 @@ export default function Signin() {
                             />
                         </div>
 
-                        {/* Password */}
                         <div className="relative">
                             <span className="absolute inset-y-0 left-0 flex items-center pl-3">
                                 <Lock className="w-5 h-5 text-gray-400" />
@@ -188,11 +213,13 @@ export default function Signin() {
 
                         <button
                             type="submit"
+                            disabled={loading}
                             className="w-full py-3 font-semibold text-white bg-gradient-to-r from-blue-500 to-purple-600 rounded-lg shadow-lg hover:from-blue-600 hover:to-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-opacity-50 transition-all duration-300"
                         >
-                            Sign In
+                            {loading ? "Signing In..." : "Sign In"}
                         </button>
                     </form>
+
                     <p className="text-sm text-center text-gray-400 mt-2">
                         If you don't have an account?{" "}
                         <Link
@@ -203,7 +230,6 @@ export default function Signin() {
                         </Link>
                     </p>
 
-                    {/* Divider */}
                     <div className="flex items-center justify-center space-x-4">
                         <span className="h-px w-full bg-gray-600"></span>
                         <span className="text-gray-400 text-sm whitespace-nowrap">
@@ -212,7 +238,6 @@ export default function Signin() {
                         <span className="h-px w-full bg-gray-600"></span>
                     </div>
 
-                    {/* Social Buttons */}
                     <div className="flex flex-col sm:flex-row gap-4">
                         <button className="flex-1 flex items-center justify-center gap-2 py-3 bg-[#32384D] hover:bg-[#414863] rounded-lg transition-colors duration-300">
                             <GoogleIcon />
